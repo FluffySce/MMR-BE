@@ -139,6 +139,8 @@ func (m *Matcher) tryCandidate(candidate []queue.Entry) (*match.Match, []string)
 			TeamAElo:      teamAElo,
 			TeamBElo:      teamBElo,
 			EloDifference: math.Abs(teamAElo - teamBElo),
+			TeamA:         match.NewTeam(teamAPlayers),
+			TeamB:         match.NewTeam(teamBPlayers),
 			Players:       matchPlayers(teamAEntries, teamBEntries),
 			CreatedAt:     m.config.Now(),
 		}, nil
@@ -270,12 +272,12 @@ func matchPlayers(teamA, teamB []queue.Entry) []match.Player {
 	players := make([]match.Player, 0, 10)
 	for _, entry := range teamA {
 		for _, member := range entry.Party.Members {
-			players = append(players, match.Player{PlayerID: member.ID, PartyID: entry.Party.ID, Team: match.TeamA})
+			players = append(players, match.Player{PlayerID: member.ID, PartyID: entry.Party.ID, Team: match.TeamA, Elo: member.Elo})
 		}
 	}
 	for _, entry := range teamB {
 		for _, member := range entry.Party.Members {
-			players = append(players, match.Player{PlayerID: member.ID, PartyID: entry.Party.ID, Team: match.TeamB})
+			players = append(players, match.Player{PlayerID: member.ID, PartyID: entry.Party.ID, Team: match.TeamB, Elo: member.Elo})
 		}
 	}
 	return players
