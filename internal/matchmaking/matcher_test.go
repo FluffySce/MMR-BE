@@ -11,8 +11,8 @@ import (
 
 func TestMatcherBuildsFiveVFiveWithoutSplittingParties(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 10, 0, 0, time.UTC)
-	m := New(DefaultConfig())
-	m.config.Now = func() time.Time { return now }
+	m := NewExhaustiveMatcher(DefaultConfig())
+	m.Config().Now = func() time.Time { return now }
 
 	entries := []queue.Entry{
 		entry(t, "a", now.Add(-time.Minute), 1000),                 // 1 player
@@ -43,7 +43,8 @@ func TestMatcherBuildsFiveVFiveWithoutSplittingParties(t *testing.T) {
 
 func TestMatcherRejectsAwayParty(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	m := New(DefaultConfig())
+	m := NewExhaustiveMatcher(DefaultConfig())
+	m.Config().Now = func() time.Time { return now }
 	entries := []queue.Entry{entryWithPresence(t, "away", now, player.Away)}
 
 	result := m.FindMatch(entries, "competitive")
@@ -54,7 +55,8 @@ func TestMatcherRejectsAwayParty(t *testing.T) {
 
 func TestMatcherBlocksInvisibleFriendAndAvoidedPlayer(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	m := New(DefaultConfig())
+	m := NewExhaustiveMatcher(DefaultConfig())
+	m.Config().Now = func() time.Time { return now }
 	m.AddFriendship("invisible", "friend")
 	m.AddAvoidance("avoider", "avoided")
 
@@ -76,7 +78,7 @@ func TestTeamAverageToleranceGrowsAndCaps(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 10, 0, 0, time.UTC)
 	config := DefaultConfig()
 	config.Now = func() time.Time { return now }
-	m := New(config)
+	m := NewExhaustiveMatcher(config)
 	candidate := []queue.Entry{entry(t, "old", now.Add(-10*time.Minute), 1000, 1000)}
 	if got := m.allowedTeamGap(candidate); got != 250 {
 		t.Fatalf("expected capped gap 250, got %v", got)

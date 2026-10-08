@@ -46,33 +46,45 @@ type Result struct {
 	Rejections []Rejection
 }
 
-type Matcher struct {
+type Matcher interface {
+	FindMatch(entries []queue.Entry, gameMode string) Result
+	AddFriendship(playerID, friendID string)
+	AddAvoidance(playerID, avoidedPlayerID string)
+}
+
+type ExhaustiveMatcher struct {
 	config      Config
 	friendships map[string]map[string]struct{}
 	avoids      map[string]map[string]struct{}
 }
 
-func New(config Config) *Matcher {
+func NewExhaustiveMatcher(config Config) *ExhaustiveMatcher {
 	if config.Now == nil {
 		config.Now = time.Now
 	}
-	return &Matcher{
+	return &ExhaustiveMatcher{
 		config:      config,
 		friendships: make(map[string]map[string]struct{}),
 		avoids:      make(map[string]map[string]struct{}),
 	}
 }
 
-func (m *Matcher) AddFriendship(playerID, friendID string) {
+func (m *ExhaustiveMatcher) Config() *Config {
+	return &m.config
+}
+
+var _ Matcher = (*ExhaustiveMatcher)(nil)
+
+func (m *ExhaustiveMatcher) AddFriendship(playerID, friendID string) {
 	addRelation(m.friendships, playerID, friendID)
 	addRelation(m.friendships, friendID, playerID)
 }
 
-func (m *Matcher) AddAvoidance(playerID, avoidedPlayerID string) {
+func (m *ExhaustiveMatcher) AddAvoidance(playerID, avoidedPlayerID string) {
 	addRelation(m.avoids, playerID, avoidedPlayerID)
 }
 
-func (m *Matcher) FindMatch(entries []queue.Entry, gameMode string) Result {
+func (m *ExhaustiveMatcher) FindMatch(entries []queue.Entry, gameMode string) Result {
 	result := Result{}
 	eligible := make([]queue.Entry, 0, len(entries))
 	for _, entry := range entries {
@@ -110,7 +122,7 @@ func (m *Matcher) FindMatch(entries []queue.Entry, gameMode string) Result {
 	return result
 }
 
-func (m *Matcher) tryCandidate(candidate []queue.Entry) (*match.Match, []string) {
+func (m *ExhaustiveMatcher) tryCandidate(candidate []queue.Entry) (*match.Match, []string) {
 	if reason := m.relationshipConflict(candidate); reason != "" {
 		return nil, []string{reason}
 	}
@@ -149,7 +161,7 @@ func (m *Matcher) tryCandidate(candidate []queue.Entry) (*match.Match, []string)
 	return nil, []string{"no valid 5v5 partition satisfies the ELO constraints"}
 }
 
-func (m *Matcher) allowedTeamGap(candidate []queue.Entry) float64 {
+func (m *ExhaustiveMatcher) allowedTeamGap(candidate []queue.Entry) float64 {
 	oldest := candidate[0].EnqueuedAt
 	for _, entry := range candidate[1:] {
 		if entry.EnqueuedAt.Before(oldest) {
@@ -164,7 +176,7 @@ func (m *Matcher) allowedTeamGap(candidate []queue.Entry) float64 {
 	return m.config.BaseTeamEloGap + additional
 }
 
-func (m *Matcher) ineligibleParty(entry queue.Entry) string {
+func (m *ExhaustiveMatcher) ineligibleParty(entry queue.Entry) string {
 	for _, member := range entry.Party.Members {
 		if member.Presence != player.Online {
 			return fmt.Sprintf("party contains player %q who is not online", member.ID)
@@ -173,7 +185,7 @@ func (m *Matcher) ineligibleParty(entry queue.Entry) string {
 	return ""
 }
 
-func (m *Matcher) relationshipConflict(entries []queue.Entry) string {
+func (m *ExhaustiveMatcher) relationshipConflict(entries []queue.Entry) string {
 	players := flatten(entries)
 	seen := make(map[string]player.Player, len(players))
 	for _, current := range players {
@@ -193,18 +205,18 @@ func (m *Matcher) relationshipConflict(entries []queue.Entry) string {
 	return ""
 }
 
-func (m *Matcher) isFriend(playerID, friendID string) bool {
+func (m *ExhaustiveMatcher) isFriend(playerID, friendID string) bool {
 	_, exists := m.friendships[playerID][friendID]
 	return exists
 }
 
-func (m *Matcher) isAvoidedByEither(playerID, otherID string) bool {
+func (m *ExhaustiveMatcher) isAvoidedByEither(playerID, otherID string) bool {
 	_, first := m.avoids[playerID][otherID]
 	_, second := m.avoids[otherID][playerID]
 	return first || second
 }
 
-func (m *Matcher) visitCombinations(entries []queue.Entry, size, start int, current []queue.Entry, visit func([]queue.Entry) bool) bool {
+func (m *ExhaustiveMatcher) visitCombinations(entries []queue.Entry, size, start int, current []queue.Entry, visit func([]queue.Entry) bool) bool {
 	if len(current) == size {
 		return visit(append([]queue.Entry(nil), current...))
 	}
