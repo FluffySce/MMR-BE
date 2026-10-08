@@ -6,17 +6,18 @@ import (
 	"time"
 )
 
-type Team string
+type TeamSide string
 
 const (
-	TeamA Team = "A"
-	TeamB Team = "B"
+	TeamA TeamSide = "A"
+	TeamB TeamSide = "B"
 )
 
 type Player struct {
 	PlayerID string
 	PartyID  string
-	Team     Team
+	Team     TeamSide
+	Elo      int
 }
 
 type Match struct {
@@ -25,6 +26,8 @@ type Match struct {
 	TeamAElo      float64
 	TeamBElo      float64
 	EloDifference float64
+	TeamA         Team
+	TeamB         Team
 	Players       []Player
 	CreatedAt     time.Time
 }
@@ -37,7 +40,7 @@ func (m Match) Validate() error {
 		return fmt.Errorf("match must contain exactly 10 players, got %d", len(m.Players))
 	}
 
-	teamCounts := map[Team]int{}
+	teamCounts := map[TeamSide]int{}
 	seen := make(map[string]struct{}, len(m.Players))
 	for _, player := range m.Players {
 		if player.PlayerID == "" || player.PartyID == "" {
