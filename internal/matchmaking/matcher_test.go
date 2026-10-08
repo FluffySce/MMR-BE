@@ -15,12 +15,11 @@ func TestMatcherBuildsFiveVFiveWithoutSplittingParties(t *testing.T) {
 	m.config.Now = func() time.Time { return now }
 
 	entries := []queue.Entry{
-		entry(t, "a", now.Add(-time.Minute), 1000, 1000),
-		entry(t, "b", now.Add(-time.Minute), 1010, 1010),
-		entry(t, "c", now.Add(-time.Minute), 990, 990),
-		entry(t, "d", now.Add(-time.Minute), 1000, 1000),
-		entry(t, "e", now.Add(-time.Minute), 1000, 1000),
-		entry(t, "f", now.Add(-time.Minute), 1000, 1000),
+		entry(t, "a", now.Add(-time.Minute), 1000),                 // 1 player
+		entry(t, "b", now.Add(-time.Minute), 1010, 1010),           // 2 players
+		entry(t, "c", now.Add(-time.Minute), 990),                  // 1 player
+		entry(t, "d", now.Add(-time.Minute), 1000, 1000, 1000),     // 3 players
+		entry(t, "e", now.Add(-time.Minute), 1000, 1000, 1000),     // 3 players
 	}
 
 	result := m.FindMatch(entries, "competitive")
@@ -29,6 +28,16 @@ func TestMatcherBuildsFiveVFiveWithoutSplittingParties(t *testing.T) {
 	}
 	if err := result.Match.Validate(); err != nil {
 		t.Fatal(err)
+	}
+	// Verify TeamA and TeamB have ELO stats (Team structs populated)
+	if result.Match.TeamA.Len() != 5 || result.Match.TeamB.Len() != 5 {
+		t.Fatalf("expected both teams to have 5 players: TeamA=%d, TeamB=%d", result.Match.TeamA.Len(), result.Match.TeamB.Len())
+	}
+	if result.Match.TeamA.Mean() != result.Match.TeamAElo {
+		t.Fatalf("TeamA.Mean() (%v) != stored TeamAElo (%v)", result.Match.TeamA.Mean(), result.Match.TeamAElo)
+	}
+	if result.Match.TeamB.Mean() != result.Match.TeamBElo {
+		t.Fatalf("TeamB.Mean() (%v) != stored TeamBElo (%v)", result.Match.TeamB.Mean(), result.Match.TeamBElo)
 	}
 }
 
