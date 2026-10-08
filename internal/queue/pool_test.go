@@ -241,6 +241,120 @@ func TestMatchmakingPoolEloBucketBoundaries(t *testing.T) {
 	}
 }
 
+func TestMatchmakingPoolEloOutsideNormalRange(t *testing.T) {
+	pool := NewMatchmakingPool(100)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Very low ELO
+	pool.Add(mustPoolEntry("very-low", "competitive", 100, now, "us-east"))
+	// Very high ELO
+	pool.Add(mustPoolEntry("very-high", "competitive", 3000, now, "us-east"))
+
+	lowBucket := pool.GetByEloBucket(1)
+	if len(lowBucket) != 1 || lowBucket[0].ID != "very-low" {
+		t.Fatalf("very low ELO: expected [very-low], got %v", lowBucket)
+	}
+
+	highBucket := pool.GetByEloBucket(30)
+	if len(highBucket) != 1 || highBucket[0].ID != "very-high" {
+		t.Fatalf("very high ELO: expected [very-high], got %v", highBucket)
+	}
+
+	// Range query spanning extreme values
+	inRange := pool.GetByEloRange(50, 3050)
+	if len(inRange) != 2 {
+		t.Fatalf("expected 2 entries in extreme range, got %d", len(inRange))
+	}
+}
+
+func TestMatchmakingPoolEntryMetadataChange(t *testing.T) {
+	pool := NewMatchmakingPool(100)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Add entry at ELO 1000
+	entry, _ := NewPoolEntry("e1", party.Party{
+		ID:       "p1",
+		GameMode: "competitive",
+		Members:  []player.Player{{ID: "p1", Elo: 1000, Presence: player.Online}},
+	}, now, "us-east")
+	pool.Add(entry)
+
+	// Verify in bucket 10
+	bucket10 := pool.GetByEloBucket(10)
+	if len(bucket10) != 1 {
+		t.Fatalf("expected entry in bucket 10, got %v", bucket10)
+	}
+
+	// Remove and re-add with different ELO (simulating party ELO change)
+	pool.Remove("e1")
+	entry, _ = NewPoolEntry("e1", party.Party{
+		ID:       "p1",
+		GameMode: "competitive",
+		Members:  []player.Player{{ID: "p1", Elo: 1200, Presence: player.Online}},
+	}, now, "us-east")
+	pool.Add(entry)
+
+	// Verify no longer in bucket 10
+	bucket10 = pool.GetByEloBucket(10)
+	if len(bucket10) != 0 {
+		t.Fatalf("expected empty bucket 10 after ELO change, got %v", bucket10)
+	}
+
+	// Verify now in bucket 12
+	bucket12 := pool.GetByEloBucket(12)
+	if len(bucket12) != 1 || bucket12[0].ID != "e1" {
+		t.Fatalf("expected entry in bucket 12, got %v", bucket12)
+	}
+}
+
+func TestMatchmakingPoolGetAdjacentEloBuckets(t *testing.T) {
+	pool := NewMatchmakingPool(100)
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	pool.Add(mustPoolEntry("b8", "competitive", 850, now, "us-east"))  // bucket 8
+	pool.Add(mustPoolEntry("b9", "competitive", 950, now, "us-east"))  // bucket 9
+	pool.Add(mustPoolEntry("b10", "competitive", 1050, now, "us-east")) // bucket 10
+	pool.Add(mustPoolEntry("b11", "competitive", 1150, now, "us-east")) // bucket 11
+	pool.Add(mustPoolEntry("b12", "competitive", 1250, now, "us-east")) // bucket 12
+
+	// Radius 0 = just center bucket
+	adjacent := pool.GetAdjacentEloBuckets(10, 0)
+	if len(adjacent) != 1 || adjacent[0].ID != "b10" {
+		t.Fatalf("radius 0: expected [b10], got %v", adjacent)
+	}
+
+	// Radius 1 = center ± 1
+	adjacent = pool.GetAdjacentEloBuckets(10, 1)
+	if len(adjacent) != 3 {
+		t.Fatalf("radius 1: expected 3 entries, got %d: %v", len(adjacent), adjacent)
+	}
+	ids := make(map[string]bool)
+	for _, e := range adjacent {
+		ids[e.ID] = true
+	}
+	if !ids["b9"] || !ids["b10"] || !ids["b11"] {
+		t.Fatalf("radius 1: missing expected buckets, got %v", ids)
+	}
+
+	// Radius 2 = center ± 2
+	adjacent = pool.GetAdjacentEloBuckets(10, 2)
+	if len(adjacent) != 5 {
+		t.Fatalf("radius 2: expected 5 entries, got %d", len(adjacent))
+	}
+
+	// Radius exceeding available buckets
+	adjacent = pool.GetAdjacentEloBuckets(10, 10)
+	if len(adjacent) != 5 {
+		t.Fatalf("large radius: expected 5 entries (all), got %d", len(adjacent))
+	}
+
+	// Negative radius treated as 0
+	adjacent = pool.GetAdjacentEloBuckets(10, -5)
+	if len(adjacent) != 1 {
+		t.Fatalf("negative radius: expected 1 entry, got %d", len(adjacent))
+	}
+}
+
 func TestMatchmakingPoolAll(t *testing.T) {
 	pool := NewMatchmakingPool(100)
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

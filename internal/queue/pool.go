@@ -190,6 +190,41 @@ func (p *MatchmakingPool) GetByEloRange(minElo, maxElo float64) []PoolEntry {
 	return result
 }
 
+// GetAdjacentEloBuckets returns entries from the given bucket and N buckets on each side.
+// Useful for dynamic search window expansion.
+func (p *MatchmakingPool) GetAdjacentEloBuckets(centerBucket, radius int) []PoolEntry {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if radius < 0 {
+		radius = 0
+	}
+
+	var candidateIDs map[string]struct{}
+	for bucket := centerBucket - radius; bucket <= centerBucket+radius; bucket++ {
+		if ids, ok := p.eloIdx[bucket]; ok {
+			if candidateIDs == nil {
+				candidateIDs = make(map[string]struct{})
+			}
+			for id := range ids {
+				candidateIDs[id] = struct{}{}
+			}
+		}
+	}
+
+	if candidateIDs == nil {
+		return nil
+	}
+
+	result := make([]PoolEntry, 0, len(candidateIDs))
+	for id := range candidateIDs {
+		if entry, ok := p.entries[id]; ok {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
 func (p *MatchmakingPool) GetByGameModeAndEloRange(gameMode string, minElo, maxElo float64) []PoolEntry {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
