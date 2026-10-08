@@ -38,6 +38,63 @@ func (p Party) Validate() error {
 	return nil
 }
 
+type Stats struct {
+	Mean     float64
+	Variance float64
+	Min      int
+	Max      int
+}
+
+func (p Party) Stats() (Stats, error) {
+	if err := p.Validate(); err != nil {
+		return Stats{}, err
+	}
+	elos := make([]int, len(p.Members))
+	for i, m := range p.Members {
+		elos[i] = m.Elo
+	}
+	mean := meanInt(elos)
+	var sum float64
+	for _, e := range elos {
+		d := float64(e) - mean
+		sum += d * d
+	}
+	return Stats{
+		Mean:     mean,
+		Variance: sum / float64(len(elos)),
+		Min:      minInt(elos),
+		Max:      maxInt(elos),
+	}, nil
+}
+
+func meanInt(values []int) float64 {
+	total := 0
+	for _, v := range values {
+		total += v
+	}
+	return float64(total) / float64(len(values))
+}
+
+func minInt(values []int) int {
+	min := values[0]
+	for _, v := range values[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func maxInt(values []int) int {
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
 // Elo returns the arithmetic mean of all players in the party.
 func (p Party) Elo() (float64, error) {
 	if err := p.Validate(); err != nil {
